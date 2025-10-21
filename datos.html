@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard MegaZona CALIFORNIA</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      background: #0e1a3a;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #00cfff;
+      font-size: 2.2em;
+      text-shadow: 1px 1px 4px #003d66;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      text-align: center;
+      color: #00cfff;
+      font-size: 1.4em;
+      margin-bottom: 10px;
+    }
+
+    .charts-wrapper {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      gap: 30px;
+      margin-top: 30px;
+    }
+
+    .chart-container {
+      flex: 1;
+      background: #13254d;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      padding: 10px 10px 20px;
+    }
+
+    svg {
+      background: transparent;
+      display: block;
+      margin: auto;
+      width: 100%;
+      height: 450px;
+    }
+
+    .tick text {
+      fill: #e0e0e0;
+      font-size: 12px;
+    }
+
+    .domain,
+    .tick line {
+      stroke: #00cfff;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: #00cfff;
+      color: #0e1a3a;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Dashboard Mega Zona CALIFORNIA</h1>
+
+  <div class="charts-wrapper">
+    <div class="chart-container">
+      <h2>Total de Incrementos por Sector</h2>
+      <svg id="barChart"></svg>
+    </div>
+
+    <div class="chart-container">
+      <h2>Evolución de Métricas</h2>
+      <svg id="lineChart"></svg>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    const tooltip = d3.select("#tooltip");
+
+    function renderBarChart(data) {
+      const sortedData = [...data].sort((a, b) => b.TotalIncremento - a.TotalIncremento);
+
+      const svg = d3.select("#barChart");
+      svg.selectAll("*").remove();
+
+      const containerWidth = svg.node().clientWidth;
+      const margin = { top: 20, right: 30, bottom: 40, left: 140 };
+      const width = containerWidth - margin.left - margin.right;
+      const height = 450 - margin.top - margin.bottom;
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const y = d3.scaleBand()
+        .domain(sortedData.map(d => d.Sector))
+        .range([0, height])
+        .padding(0.3);
+
+      const x = d3.scaleLinear()
+        .domain([0, d3.max(sortedData, d => d.TotalIncremento)])
+        .range([0, width]);
+
+      const colorScale = d3.scaleLinear()
+        .domain([d3.min(sortedData, d => d.TotalIncremento), d3.max(sortedData, d => d.TotalIncremento)])
+        .range(["#a2d4f5", "#007acc"]);
+
+      g.append("g")
+        .call(d3.axisLeft(y).tickSize(0))
+        .selectAll("text")
+        .style("font-size", "13px")
+        .style("fill", "#ffffff");
+
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickSize(0))
+        .selectAll("text")
+        .style("font-size", "12px")
+        .style("fill", "#ffffff");
+
+      g.selectAll(".bar")
+        .data(sortedData)
+        .enter()
+        .append("rect")
+        .attr("y", d => y(d.Sector))
+        .attr("height", y.bandwidth())
+        .attr("x", 0)
+        .attr("width", 0)
+        .attr("rx", 6)
+        .attr("fill", d => colorScale(d.TotalIncremento))
+        .transition()
+        .duration(800)
+        .attr("width", d => x(d.TotalIncremento));
+
+      g.selectAll(".bar")
+        .data(sortedData)
+        .on("mouseover", (event, d) => {
+          tooltip.style("left", `${event.pageX + 10}px`)
+            .style("top", `${event.pageY - 20}px`)
+            .style("opacity", 1)
+            .html(`<strong>${d.Sector}</strong><br>TotalIncremento: ${d.TotalIncremento}`);
+        })
+        .on("mouseout", () => tooltip.style("opacity", 0));
+    }
+
+    function renderLineChart(data) {
+      const svg = d3.select("#lineChart");
+      svg.selectAll("*").remove();
+
+      const containerWidth = svg.node().clientWidth;
+      const margin = { top: 20, right: 100, bottom: 100, left: 100 };
+      const width = containerWidth - margin.left - margin.right;
+      const height = 450 - margin.top - margin.bottom;
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const x = d3.scalePoint()
+        .domain(data.map(d => d.Sector))
+        .range([0, width])
+        .padding(0.5);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => Math.max(d.IncSemanal, d.IncPonderado, d.IncLineal))])
+        .range([height, 0]);
+
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickSize(0))
+        .selectAll("text")
+        .attr("transform", "rotate(-45)")
+        .style("text-anchor", "end")
+        .style("font-size", "12px")
+        .attr("dx", "-1em")
+        .attr("dy", "0.5em");
+
+      g.append("g")
+        .call(d3.axisLeft(y).tickSize(0))
+        .selectAll("text")
+        .style("font-size", "12px");
+
+      const line = metric => d3.line()
+        .x(d => x(d.Sector) + 5)
+        .y(d => y(d[metric]));
+
+      const metrics = [
+        { key: "IncSemanal", color: "blue" },
+        { key: "IncPonderado", color: "orange" },
+        { key: "IncLineal", color: "limegreen" }
+      ];
+
+      metrics.forEach(({ key, color }) => {
+        g.append("path")
+          .datum(data)
+          .attr("fill", "none")
+          .attr("stroke", color)
+          .attr("stroke-width", 2.5)
+          .attr("d", line(key));
+
+        g.selectAll(`.dot-${key}`)
+          .data(data)
+          .enter()
+          .append("circle")
+          .attr("cx", d => x(d.Sector) + 5)
+          .attr("cy", d => y(d[key]))
+          .attr("r", 5)
+          .attr("fill", color)
+          .on("mouseover", (event, d) => {
+            tooltip.style("left", `${event.pageX + 10}px`)
+              .style("top", `${event.pageY - 20}px`)
+              .style("opacity", 1)
+              .html(`<strong>${d.Sector}</strong><br>${key}: ${d[key].toFixed(3)}`);
+          })
+          .on("mouseout", () => tooltip.style("opacity", 0));
+      });
+    }
+
+    const API_CONFIG = {
+      baseUrl: 'http://172.16.11.24:2020/api',
+      endpoints: {
+        incrementos: '/Peso/por-sector'
+      }
+    };
+
+    async function obtenerDatos() {
+      try {
+        const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.incrementos}?cedula=jordan.avellan&Isdetalle=false`;
+        const response = await fetch(apiUrl);
+
+        if (!response.ok) {
+          console.error(`Error HTTP: ${response.status} - ${response.statusText}`);
+          return [];
+        }
+
+        const datos = await response.json();
+
+        if (!Array.isArray(datos) || datos.length === 0) {
+          console.warn('La respuesta del API está vacía o no es un arreglo.');
+          return [];
+        }
+
+        const datosValidados = datos.map(d => ({
+          Sector: d.sector || '',
+          IncSemanal: d.incSemanal ?? 0,
+          IncPonderado: d.incPonderado ?? 0,
+          IncLineal: d.incLineal ?? 0,
+          TotalIncremento: d.totalIncremento ?? 0
+        }));
+
+        return datosValidados;
+      } catch (error) {
+        console.error('Error al obtener datos del API:', error);
+        return [];
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      const datos = await obtenerDatos();
+      if (datos.length === 0) {
+        console.warn("No hay datos para mostrar.");
+        return;
+      }
+
+      renderBarChart(datos);
+      renderLineChart(datos);
+    });
+  </script>
+</body>
+
+</html>
