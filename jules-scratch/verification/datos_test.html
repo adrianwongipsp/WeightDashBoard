@@ -239,22 +239,22 @@
     /*  function renderLineChart(data) {
        const svg = d3.select("#lineChart");
        svg.selectAll("*").remove();
- 
+
        const containerWidth = svg.node().clientWidth;
        const margin = { top: 20, right: 100, bottom: 100, left: 100 };
        const width = containerWidth - margin.left - margin.right;
        const height = 450 - margin.top - margin.bottom;
        const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
- 
+
        const x = d3.scalePoint()
          .domain(data.map(d => d.Sector))
          .range([0, width])
          .padding(0.5);
- 
+
        const y = d3.scaleLinear()
          .domain([0, d3.max(data, d => Math.max(d.IncSemanal, d.IncPonderado, d.IncLineal))])
          .range([height, 0]);
- 
+
        g.append("g")
          .attr("transform", `translate(0,${height})`)
          .call(d3.axisBottom(x).tickSize(0))
@@ -264,22 +264,22 @@
          .style("font-size", "12px")
          .attr("dx", "-1em")
          .attr("dy", "0.5em");
- 
+
        g.append("g")
          .call(d3.axisLeft(y).tickSize(0))
          .selectAll("text")
          .style("font-size", "12px");
- 
+
        const line = metric => d3.line()
          .x(d => x(d.Sector) + 5)
          .y(d => y(d[metric]));
- 
+
        const metrics = [
          { key: "IncSemanal", color: "blue" },
          { key: "IncPonderado", color: "orange" },
          { key: "IncLineal", color: "limegreen" }
        ];
- 
+
        metrics.forEach(({ key, color }) => {
          g.append("path")
            .datum(data)
@@ -287,7 +287,7 @@
            .attr("stroke", color)
            .attr("stroke-width", 2.5)
            .attr("d", line(key));
- 
+
          g.selectAll(`.dot-${key}`)
            .data(data)
            .enter()
@@ -305,7 +305,7 @@
            .on("mouseout", () => tooltip.style("opacity", 0));
        });
      }
- 
+
   */
 
     function renderIncrementBarChart(data) {
@@ -390,6 +390,7 @@
             popupTitle.textContent = `Detalles del Sector: ${d.Sector}`;
             renderizarTablaPopup(null);
             popup.style.display = 'flex';
+            debugger;
             try {
                 const detalles = await obtenerDetallesPiscina(d.IdSector);
                 renderizarTablaPopup(detalles);
@@ -537,6 +538,7 @@
               popupTitle.textContent = `Detalles de la Semana ${d.Semana} - Sector: ${d.Sector}`;
               renderizarTablaPopup(null);
               popup.style.display = 'flex';
+              debugger;
               try {
                   const detalles = await obtenerDetallesPiscina(d.IdSector, d.Semana);
                   renderizarTablaPopup(detalles);
@@ -626,24 +628,29 @@
     }
 
     async function obtenerDetallesPiscina(sector, semana) {
-      try {
-        let apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.incrementos}?cedula=jordan.avellan&idSector=${sector}&Isdetalle=true`;
-        if (semana) {
-          apiUrl += `&semana=${semana}`;
+      // Mocked data for testing
+      return [
+        {
+            "piscina": "Piscina 1",
+            "pesoActual": 15.5,
+            "pesoAnterior": 14.2,
+            "incremento": 1.3,
+            "fechaMuestreo": "2023-10-26",
+            "pesoSiembra": 5.0,
+            "diasSembrado": 120,
+            "ha": 10
+        },
+        {
+            "piscina": "Piscina 2",
+            "pesoActual": 16.0,
+            "pesoAnterior": 15.0,
+            "incremento": 1.0,
+            "fechaMuestreo": "2023-10-26",
+            "pesoSiembra": 5.2,
+            "diasSembrado": 125,
+            "ha": 12
         }
-        const response = await fetch(apiUrl);
-
-        if (!response.ok) {
-          console.error(`Error HTTP: ${response.status} - ${response.statusText}`);
-          return [];
-        }
-
-        const datos = await response.json();
-        return Array.isArray(datos) ? datos : [];
-      } catch (error) {
-        console.error(`Error al obtener detalles para el sector ${sector}:`, error);
-        return [];
-      }
+      ];
     }
 
     function renderizarTablaPopup(datos) {
@@ -684,11 +691,36 @@
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
-      const datos = await obtenerDatos();
-      if (datos.length === 0) {
-        console.warn("No hay datos para mostrar.");
-        return;
-      }
+      const datos = [
+        {
+          "Sector": "Sector A",
+          "IncSemanal": 1.2,
+          "IncPonderado": 1.1,
+          "IncLineal": 1.3,
+          "TotalIncremento": 3.6,
+          "IdSector": 1,
+          "IncrementoSemana1": 0.8,
+          "IncrementoSemana2": 1,
+          "IncrementoSemana3": 1.2,
+          "IncrementoSemana4": 0.6,
+          "TipoMuestreo": "Tipo 1",
+          "Semana": 42
+        },
+        {
+          "Sector": "Sector B",
+          "IncSemanal": 1.5,
+          "IncPonderado": 1.4,
+          "IncLineal": 1.6,
+          "TotalIncremento": 4.5,
+          "IdSector": 2,
+          "IncrementoSemana1": 0.9,
+          "IncrementoSemana2": 1.1,
+          "IncrementoSemana3": 1.3,
+          "IncrementoSemana4": 1.2,
+          "TipoMuestreo": "Tipo 2",
+          "Semana": 42
+        }
+      ];
 
       renderBarChart(datos);
       renderLineChart(datos);
