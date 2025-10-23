@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8" />
-  <title>Dashboard MegaZona CALIFORNIA</title>
+  <title>Dashboard Incrementos de Mega Zona California</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
     body {
@@ -72,28 +73,102 @@
       opacity: 0;
       transition: opacity 0.2s ease;
     }
+
+    .popup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .popup-content {
+      background: #13254d;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+      position: relative;
+      width: 80%;
+      max-width: 900px;
+    }
+
+    .popup-close {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 28px;
+      font-weight: bold;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    #popup-table-container {
+      overflow-y: auto;
+      max-height: 400px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th,
+    td {
+      border: 1px solid #00cfff;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #00cfff;
+      color: #0e1a3a;
+    }
   </style>
 </head>
+
 <body>
 
   <h1>Dashboard Mega Zona CALIFORNIA</h1>
 
   <div class="charts-wrapper">
-    <div class="chart-container">
-      <h2>Total de Incrementos por Sector</h2>
-      <svg id="barChart"></svg>
-    </div>
 
     <div class="chart-container">
-      <h2>Evolución de Métricas</h2>
+      <h2 id="tituloBarChart">Incrementos por Sector de la Semana Actual</h2>
+      <svg id="incrementBarChart"></svg>
+    </div>
+
+
+    <div class="chart-container">
+      <h2>Evolución de Métricas en las Últimas 4 Semanas</h2>
       <svg id="lineChart"></svg>
+    </div>
+  </div>
+  <div class="charts-wrapper">
+    <div class="chart-container">
+      <h2>Total de Cantidad de Muestreo por Sector</h2>
+      <svg id="barChart"></svg>
     </div>
   </div>
 
   <div class="tooltip" id="tooltip"></div>
 
+  <div class="popup-overlay" id="popup">
+    <div class="popup-content">
+      <span class="popup-close" id="popup-close">&times;</span>
+      <h2 id="popup-title">Detalles del Sector</h2>
+      <div id="popup-table-container"></div>
+    </div>
+  </div>
+
   <script>
     const tooltip = d3.select("#tooltip");
+
 
     function renderBarChart(data) {
       const sortedData = [...data].sort((a, b) => b.TotalIncremento - a.TotalIncremento);
@@ -133,100 +208,357 @@
         .style("font-size", "12px")
         .style("fill", "#ffffff");
 
-      g.selectAll(".bar")
+      // Crear barras y guardar referencia
+      const bars = g.selectAll(".bar")
         .data(sortedData)
         .enter()
         .append("rect")
+        .attr("class", "bar")
         .attr("y", d => y(d.Sector))
         .attr("height", y.bandwidth())
         .attr("x", 0)
         .attr("width", 0)
         .attr("rx", 6)
         .attr("fill", d => colorScale(d.TotalIncremento))
-        .transition()
-        .duration(800)
-        .attr("width", d => x(d.TotalIncremento));
-
-      g.selectAll(".bar")
-        .data(sortedData)
+        .style("cursor", "pointer")
         .on("mouseover", (event, d) => {
           tooltip.style("left", `${event.pageX + 10}px`)
             .style("top", `${event.pageY - 20}px`)
             .style("opacity", 1)
             .html(`<strong>${d.Sector}</strong><br>TotalIncremento: ${d.TotalIncremento}`);
         })
-        .on("mouseout", () => tooltip.style("opacity", 0));
+        .on("mouseout", () => tooltip.style("opacity", 0))
+        .on("click", async (event, d) => {
+          const popup = document.getElementById('popup');
+          const popupTitle = document.getElementById('popup-title');
+
+          popupTitle.textContent = `Detalles del Sector: ${d.Sector}`;
+          renderizarTablaPopup(null);
+          popup.style.display = 'flex';
+          debugger;
+          try {
+            const detalles = await obtenerDetallesPiscina(d.IdSector);
+            renderizarTablaPopup(detalles);
+          } catch (error) {
+            console.error("Error al obtener detalles:", error);
+          }
+        });
+
+      // Animación separada
+      bars.transition()
+        .duration(800)
+        .attr("width", d => x(d.TotalIncremento));
     }
 
-    function renderLineChart(data) {
-      const svg = d3.select("#lineChart");
+
+    /*  function renderLineChart(data) {
+       const svg = d3.select("#lineChart");
+       svg.selectAll("*").remove();
+ 
+       const containerWidth = svg.node().clientWidth;
+       const margin = { top: 20, right: 100, bottom: 100, left: 100 };
+       const width = containerWidth - margin.left - margin.right;
+       const height = 450 - margin.top - margin.bottom;
+       const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+ 
+       const x = d3.scalePoint()
+         .domain(data.map(d => d.Sector))
+         .range([0, width])
+         .padding(0.5);
+ 
+       const y = d3.scaleLinear()
+         .domain([0, d3.max(data, d => Math.max(d.IncSemanal, d.IncPonderado, d.IncLineal))])
+         .range([height, 0]);
+ 
+       g.append("g")
+         .attr("transform", `translate(0,${height})`)
+         .call(d3.axisBottom(x).tickSize(0))
+         .selectAll("text")
+         .attr("transform", "rotate(-45)")
+         .style("text-anchor", "end")
+         .style("font-size", "12px")
+         .attr("dx", "-1em")
+         .attr("dy", "0.5em");
+ 
+       g.append("g")
+         .call(d3.axisLeft(y).tickSize(0))
+         .selectAll("text")
+         .style("font-size", "12px");
+ 
+       const line = metric => d3.line()
+         .x(d => x(d.Sector) + 5)
+         .y(d => y(d[metric]));
+ 
+       const metrics = [
+         { key: "IncSemanal", color: "blue" },
+         { key: "IncPonderado", color: "orange" },
+         { key: "IncLineal", color: "limegreen" }
+       ];
+ 
+       metrics.forEach(({ key, color }) => {
+         g.append("path")
+           .datum(data)
+           .attr("fill", "none")
+           .attr("stroke", color)
+           .attr("stroke-width", 2.5)
+           .attr("d", line(key));
+ 
+         g.selectAll(`.dot-${key}`)
+           .data(data)
+           .enter()
+           .append("circle")
+           .attr("cx", d => x(d.Sector) + 5)
+           .attr("cy", d => y(d[key]))
+           .attr("r", 5)
+           .attr("fill", color)
+           .on("mouseover", (event, d) => {
+             tooltip.style("left", `${event.pageX + 10}px`)
+               .style("top", `${event.pageY - 20}px`)
+               .style("opacity", 1)
+               .html(`<strong>${d.Sector}</strong><br>${key}: ${d[key].toFixed(3)}`);
+           })
+           .on("mouseout", () => tooltip.style("opacity", 0));
+       });
+     }
+ 
+  */
+
+    function renderIncrementBarChart(data) {
+      const svg = d3.select("#incrementBarChart");
       svg.selectAll("*").remove();
 
-      const containerWidth = svg.node().clientWidth;
-      const margin = { top: 20, right: 100, bottom: 100, left: 100 };
+      const containerWidth = svg.node().clientWidth || 900;
+      const margin = { top: 30, right: 30, bottom: 80, left: 60 };
       const width = containerWidth - margin.left - margin.right;
       const height = 450 - margin.top - margin.bottom;
-      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-      const x = d3.scalePoint()
-        .domain(data.map(d => d.Sector))
+      const g = svg
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      // Calcular total de incremento por sector y ordenar de menor a mayor
+      const processed = data
+        .map(d => ({
+          Sector: d.Sector,
+          Total: Math.floor((d.IncSemanal) * 100) / 100
+        }))
+        .sort((a, b) => a.Total - b.Total);
+
+      const x = d3.scaleBand()
+        .domain(processed.map(d => d.Sector))
         .range([0, width])
-        .padding(0.5);
+        .padding(0);
 
       const y = d3.scaleLinear()
-        .domain([0, d3.max(data, d => Math.max(d.IncSemanal, d.IncPonderado, d.IncLineal))])
+        .domain([0, d3.max(processed, d => d.Total)])
         .range([height, 0]);
 
-      g.append("g")
+      const colorScale = d3.scaleLinear()
+        .domain([0, d3.max(processed, d => d.Total)])
+        .range(["#ffd699", "#ff6600"]);
+
+      // Eje X con etiquetas inclinadas y sin línea base
+      const xAxis = g.append("g")
         .attr("transform", `translate(0,${height})`)
-        .call(d3.axisBottom(x).tickSize(0))
-        .selectAll("text")
+        .call(d3.axisBottom(x).tickSize(0));
+
+      xAxis.selectAll("text")
         .attr("transform", "rotate(-45)")
         .style("text-anchor", "end")
         .style("font-size", "12px")
-        .attr("dx", "-1em")
-        .attr("dy", "0.5em");
+        .style("fill", "#ffffff");
 
-      g.append("g")
-        .call(d3.axisLeft(y).tickSize(0))
-        .selectAll("text")
-        .style("font-size", "12px");
+      xAxis.select(".domain").remove(); // eliminar línea del eje X
 
-      const line = metric => d3.line()
-        .x(d => x(d.Sector) + 5)
-        .y(d => y(d[metric]));
+      // Eje Y sin texto ni línea
+      const yAxis = g.append("g")
+        .call(d3.axisLeft(y).ticks(0).tickSize(0));
 
-      const metrics = [
-        { key: "IncSemanal", color: "blue" },
-        { key: "IncPonderado", color: "orange" },
-        { key: "IncLineal", color: "limegreen" }
-      ];
+      yAxis.selectAll("text").remove();
+      yAxis.select(".domain").remove(); // eliminar línea del eje Y
 
-      metrics.forEach(({ key, color }) => {
+      // Barras
+      g.selectAll("rect")
+        .data(processed)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.Sector))
+        .attr("y", d => y(d.Total))
+        .attr("width", x.bandwidth())
+        .attr("height", d => height - y(d.Total))
+        .attr("fill", d => colorScale(d.Total))
+        .attr("rx", 4)
+        .on("mouseover", (event, d) => {
+          tooltip.style("left", `${event.pageX + 10}px`)
+            .style("top", `${event.pageY - 20}px`)
+            .style("opacity", 1)
+            .html(`<strong>${d.Sector}</strong><br>Total Incremento: ${d.Total.toFixed(2)}`);
+        })
+        .on("mouseout", () => tooltip.style("opacity", 0));
+
+      // Etiquetas de valor truncadas
+      g.selectAll("text.value")
+        .data(processed)
+        .enter()
+        .append("text")
+        .attr("class", "value")
+        .attr("x", d => x(d.Sector) + x.bandwidth() / 2)
+        .attr("y", d => y(d.Total) - 5)
+        .attr("text-anchor", "middle")
+        .style("fill", "#ffffff")
+        .style("font-size", "11px")
+        .text(d => d.Total.toFixed(2));
+    }
+
+    function renderLineChart(datosValidados) {
+      const svg = d3.select("#lineChart");
+      svg.selectAll("*").remove();
+
+      const containerWidth = svg.node().clientWidth || 600;
+      const margin = { top: 40, right: 40, bottom: 120, left: 60 };
+      const width = containerWidth - margin.left - margin.right;
+      const height = 450 - margin.top - margin.bottom;
+
+      const g = svg
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom + 60)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("position", "absolute")
+        .style("padding", "6px 10px")
+        .style("background", "#333")
+        .style("color", "#fff")
+        .style("border-radius", "4px")
+        .style("font-size", "12px")
+        .style("pointer-events", "none")
+        .style("opacity", 0);
+
+      const rawSeries = [];
+      datosValidados.forEach(d => {
+        const baseSemana = d.Semana ?? 0;
+        const sector = d.Sector ?? '';
+        rawSeries.push(
+          { Sector: sector, Semana: baseSemana - 4, Incremento: d.IncrementoSemana1 ?? 0 },
+          { Sector: sector, Semana: baseSemana - 3, Incremento: d.IncrementoSemana2 ?? 0 },
+          { Sector: sector, Semana: baseSemana - 2, Incremento: d.IncrementoSemana3 ?? 0 },
+          { Sector: sector, Semana: baseSemana - 1, Incremento: d.IncrementoSemana4 ?? 0 }
+        );
+      });
+
+      const grouped = d3.group(rawSeries, d => d.Sector);
+      const series = Array.from(grouped, ([sector, values]) => {
+        const uniqueByWeek = Array.from(
+          d3.group(values, d => d.Semana),
+          ([semana, entries]) => entries[0]
+        );
+        return { Sector: sector, values: uniqueByWeek.sort((a, b) => a.Semana - b.Semana) };
+      });
+
+      const allWeeks = [...new Set(series.flatMap(s => s.values.map(v => v.Semana)))].sort((a, b) => a - b);
+      const allValues = series.flatMap(s => s.values.map(v => v.Incremento));
+
+      const x = d3.scalePoint()
+        .domain(allWeeks)
+        .range([0, width])
+        .padding(0.2); // acercar semana inicial al eje Y
+
+      const y = d3.scaleLinear()
+        .domain([1, d3.max(allValues)])
+        .range([height, 0]);
+
+      const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+      // Eje X con etiquetas "Semana XX"
+      const xAxis = g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickFormat(d => `Semana ${d}`).tickSize(0));
+
+      xAxis.selectAll("text")
+        .attr("transform", "rotate(-45)")
+        .style("text-anchor", "end")
+        .style("font-size", "12px")
+        .style("fill", "#ffffff");
+
+      xAxis.select(".domain").attr("stroke", "#ffffff");
+      xAxis.selectAll(".tick line").remove(); // quitar rayitas separadoras
+
+      // Eje Y sin rayitas horizontales, pero con línea vertical
+      const yAxis = g.append("g")
+        .call(d3.axisLeft(y).ticks(5).tickFormat(d => d === 0 ? "" : d));
+
+      yAxis.selectAll(".tick line").remove(); // quitar rayitas horizontales
+      yAxis.selectAll("text")
+        .style("font-size", "12px")
+        .style("fill", "#ffffff");
+
+      yAxis.select(".domain")
+        .attr("stroke", "#ffffff")
+        .attr("stroke-width", 1.5);
+
+      // Líneas por sector (más gruesas)
+      const line = d3.line()
+        .x(d => x(d.Semana))
+        .y(d => y(d.Incremento));
+
+      series.forEach((s, i) => {
         g.append("path")
-          .datum(data)
+          .datum(s.values)
           .attr("fill", "none")
-          .attr("stroke", color)
-          .attr("stroke-width", 2.5)
-          .attr("d", line(key));
+          .attr("stroke", color(s.Sector))
+          .attr("stroke-width", 3)
+          .attr("d", line);
 
-        g.selectAll(`.dot-${key}`)
-          .data(data)
+        g.selectAll(`circle.sector-${i}`)
+          .data(s.values)
           .enter()
           .append("circle")
-          .attr("cx", d => x(d.Sector) + 5)
-          .attr("cy", d => y(d[key]))
-          .attr("r", 5)
-          .attr("fill", color)
+          .attr("class", `sector-${i}`)
+          .attr("cx", d => x(d.Semana))
+          .attr("cy", d => y(d.Incremento))
+          .attr("r", 3)
+          .attr("fill", color(s.Sector))
           .on("mouseover", (event, d) => {
             tooltip.style("left", `${event.pageX + 10}px`)
               .style("top", `${event.pageY - 20}px`)
               .style("opacity", 1)
-              .html(`<strong>${d.Sector}</strong><br>${key}: ${d[key].toFixed(3)}`);
+              .html(`<strong>${d.Sector}</strong><br>Semana ${d.Semana}<br>Incremento: ${d.Incremento.toFixed(2)}`);
           })
           .on("mouseout", () => tooltip.style("opacity", 0));
       });
+
+      // Leyenda en columnas de 3
+      const legend = svg.append("g")
+        .attr("transform", `translate(${margin.left},${height + margin.top + 60})`);
+
+      const itemsPerRow = 3;
+      series.forEach((s, i) => {
+        const col = i % itemsPerRow;
+        const row = Math.floor(i / itemsPerRow);
+        const xPos = col * 160;
+        const yPos = row * 20;
+
+        legend.append("rect")
+          .attr("x", xPos)
+          .attr("y", yPos)
+          .attr("width", 12)
+          .attr("height", 12)
+          .attr("fill", color(s.Sector));
+
+        legend.append("text")
+          .attr("x", xPos + 18)
+          .attr("y", yPos + 10)
+          .text(s.Sector)
+          .style("font-size", "12px")
+          .style("fill", "#ffffff");
+      });
     }
+
+
 
     const API_CONFIG = {
       baseUrl: 'http://172.16.11.24:2020/api',
@@ -237,7 +569,7 @@
 
     async function obtenerDatos() {
       try {
-        const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.incrementos}?cedula=jordan.avellan&Isdetalle=false`;
+        const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.incrementos}?cedula=jordan.avellan&idSector=&IsDetalle=false`;
         const response = await fetch(apiUrl);
 
         if (!response.ok) {
@@ -252,19 +584,86 @@
           return [];
         }
 
+
         const datosValidados = datos.map(d => ({
           Sector: d.sector || '',
           IncSemanal: d.incSemanal ?? 0,
           IncPonderado: d.incPonderado ?? 0,
           IncLineal: d.incLineal ?? 0,
-          TotalIncremento: d.totalIncremento ?? 0
+          TotalIncremento: d.totalIncremento ?? 0,
+          IdSector: d.idSector ?? 0,
+          IncrementoSemana1: d.incrementoSemana1 ?? 0,
+          IncrementoSemana2: d.incrementoSemana2 ?? 0,
+          IncrementoSemana3: d.incrementoSemana3 ?? 0,
+          IncrementoSemana4: d.incrementoSemana4 ?? 0,
+          TipoMuestreo: d.tipoMuestreo,
+          Semana: d.semana
         }));
+
+        const semanaActual = datosValidados[0]?.Semana ?? '';
+        document.querySelector("#tituloBarChart").textContent = `Incrementos por Sector de la Semana ${semanaActual}`;
 
         return datosValidados;
       } catch (error) {
         console.error('Error al obtener datos del API:', error);
         return [];
       }
+    }
+
+    async function obtenerDetallesPiscina(sector) {
+      try {
+        debugger;
+        const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.incrementos}?cedula=jordan.avellan&idSector=${sector}&Isdetalle=true`;
+        const response = await fetch(apiUrl);
+
+        if (!response.ok) {
+          console.error(`Error HTTP: ${response.status} - ${response.statusText}`);
+          return [];
+        }
+
+        const datos = await response.json();
+        return Array.isArray(datos) ? datos : [];
+      } catch (error) {
+        console.error(`Error al obtener detalles para el sector ${sector}:`, error);
+        return [];
+      }
+    }
+
+    function renderizarTablaPopup(datos) {
+      const container = document.getElementById('popup-table-container');
+      container.innerHTML = '';
+
+      if (!datos || datos.length === 0) {
+        container.innerHTML = '<p>No hay datos disponibles para este sector.</p>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const tbody = document.createElement('tbody');
+
+      const headers = ['Piscina', 'Peso Actual', 'Peso Anterior', 'Incremento', 'Fecha Muestreo', 'Peso Siembra', 'DiasSembrado', 'Ha'];
+      const headerRow = document.createElement('tr');
+      headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.textContent = headerText;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+
+      datos.forEach(dato => {
+        const row = document.createElement('tr');
+        headers.forEach(header => {
+          const cell = document.createElement('td');
+          cell.textContent = dato[header.charAt(0).toLowerCase() + header.slice(1)] ?? '';
+          row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      container.appendChild(table);
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
@@ -276,6 +675,20 @@
 
       renderBarChart(datos);
       renderLineChart(datos);
+      renderIncrementBarChart(datos);
+
+      const popup = document.getElementById('popup');
+      const popupClose = document.getElementById('popup-close');
+
+      popupClose.addEventListener('click', () => {
+        popup.style.display = 'none';
+      });
+
+      popup.addEventListener('click', (event) => {
+        if (event.target === popup) {
+          popup.style.display = 'none';
+        }
+      });
     });
   </script>
 </body>
